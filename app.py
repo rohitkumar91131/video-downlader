@@ -95,71 +95,54 @@ def download():
     safe_title = re.sub(r'[^a-zA-Z0-9-_]', '_', title or 'video')
     filename = f"{safe_title}.mkv"
 
-    # Step 1: Get Stream URLs using yt-dlp
-    try:
-        # Get direct URLs for video and audio
-        # We ask for the specific format + best audio
-        get_url_cmd = [
-            'yt-dlp',
-            '-f', f"{format_id}+bestaudio/best",
-            '--get-url',
-            url
-        ]
-        
-        urls_output = subprocess.check_output(get_url_cmd).decode('utf-8').strip().split('\n')
-        
-        if not urls_output:
-            return "Failed to extract stream URLs", 500
+    # Absolute path to binaries
+    current_dir = os.getcwd()
+    yt_dlp_path = os.path.join(current_dir, "yt-dlp")
+    ffmpeg_path = os.path.join(current_dir, "ffmpeg") # We will download this to root
 
-        video_url = urls_output[0]
-        audio_url = urls_output[1] if len(urls_output) > 1 else None
+    # Verify binaries exist
+    if not os.path.exists(yt_dlp_path):
+        logging.error(f"yt-dlp not found at {yt_dlp_path}")
+        return "Server Error: yt-dlp binary missing", 500
 
-        # Step 2: Construct FFmpeg command to stream and merge
-        # -i video_url -i audio_url (if exists) -c copy -f matroska -
-        ffmpeg_cmd = ['./ffmpeg']
-        
-        # Add User-Agent to avoid 403 Forbidden from YouTube
-        # (Naive approach, usually works for signed URLs temporarily)
-        ffmpeg_cmd.extend(['-headers', 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36\r\n'])
-        ffmpeg_cmd.extend(['-i', video_url])
-        
-        if audio_url:
-            ffmpeg_cmd.extend(['-headers', 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36\r\n'])
-            ffmpeg_cmd.extend(['-i', audio_url])
-            # Map video and audio streams
-            ffmpeg_cmd.extend(['-map', '0:v', '-map', '1:a'])
-            # Copy codecs (no re-encoding) for speed and quality
-            ffmpeg_cmd.extend(['-c:v', 'copy', '-c:a', 'aac']) # Convert audio to aac if needed for mkv compatibility or just copy? 
-            # MKV supports almost anything. '-c copy' is safest/fastest.
-            # But sometimes audio codec in separate stream might overlap?
-            # Safest is -c copy.
-            ffmpeg_cmd.extend(['-c', 'copy'])
-        else:
-            ffmpeg_cmd.extend(['-c', 'copy'])
-
-        # Output to stdout in matroska format
-        ffmpeg_cmd.extend(['-f', 'matroska', '-'])
-        # Add moving flags for robustness? Not needed for MKV stream.
-
-    except subprocess.CalledProcessError as e:
-        logging.error(f"Error getting URLs: {e}")
-        return "Failed to resolve stream", 500
+    # Ensure ffmpeg is in PATH for yt-dlp to find it
+    # OR pass --ffmpeg-location
+    
+    cmd = [
+        yt_dlp_path,
+        '--extractor-args', 'youtube:player_client=android', # Bypass bot check
+        '-f', f"{format_id}+bestaudio/best", # Merge
+        '--merge-output-format', 'mkv',      # Ensure streamable container
+        '--ffmpeg-location', ffmpeg_path,    # Explicitly tell yt-dlp where ffmpeg is
+        '-o', '-',                           # Stream to stdout
+        url
+    ]
 
     def generate():
         process = subprocess.Popen(
-            ffmpeg_cmd,
+            cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE # Capture stderr to avoid polluting stream, log if needed
+            stderr=subprocess.PIPE
         )
         
         try:
+            # Read chunks
             while True:
                 chunk = process.stdout.read(4096)
                 if not chunk:
                     break
                 yield chunk
+            
             process.wait()
+            
+            # Check for errors after completion
+            if process.returncode != 0:
+                stderr = process.stderr.read().decode()
+                logging.error(f"yt-dlp error: {stderr}")
+
         except GeneratorExit:
+            # Client disconnected
+            logging.info("Client disconnected, killing yt-dlp process")
             process.terminate()
             process.wait()
         except Exception as e:
