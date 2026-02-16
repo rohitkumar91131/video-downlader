@@ -4,6 +4,7 @@ import json
 import logging
 import subprocess
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+import sys
 import yt_dlp
 
 app = Flask(__name__)
@@ -96,26 +97,18 @@ def download():
     safe_title = re.sub(r'[^a-zA-Z0-9-_]', '_', title or 'video')
     filename = f"{safe_title}.mkv"
 
-    # Absolute path to binaries
     current_dir = os.getcwd()
-    yt_dlp_path = os.path.join(current_dir, "yt-dlp")
-    ffmpeg_path = os.path.join(current_dir, "ffmpeg") # We will download this to root
+    ffmpeg_path = os.path.join(current_dir, "ffmpeg")
 
-    # Verify binaries exist
-    if not os.path.exists(yt_dlp_path):
-        logging.error(f"yt-dlp not found at {yt_dlp_path}")
-        return "Server Error: yt-dlp binary missing", 500
 
-    # Ensure ffmpeg is in PATH for yt-dlp to find it
-    # OR pass --ffmpeg-location
-    
     # Step 1: Get Stream URLs using yt-dlp
     try:
         # Get direct URLs for video and audio
         # We ask for the specific format + best audio
-        # Use iOS client to match /info behavior
+        # Using sys.executable -m yt_dlp ensures we use the pip-installed version (from master branch)
+        # which is newer than the standalone binary release.
         get_url_cmd = [
-            yt_dlp_path,
+            sys.executable, '-m', 'yt_dlp',
             '--extractor-args', 'youtube:player_client=ios',
             '-f', f"{format_id}+bestaudio/best",
             '--get-url',

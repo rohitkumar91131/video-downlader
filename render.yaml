@@ -3,7 +3,7 @@ services:
     name: youtube-downloader-python
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt && curl -L https://github.com/eugeneware/ffmpeg-static/releases/latest/download/ffmpeg-linux-x64 -o ffmpeg && chmod +x ffmpeg && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o yt-dlp && chmod +x yt-dlp
+    buildCommand: pip install -r requirements.txt && curl -L https://github.com/eugeneware/ffmpeg-static/releases/latest/download/ffmpeg-linux-x64 -o ffmpeg && chmod +x ffmpeg
     startCommand: gunicorn app:app
     envVars:
       - key: PORT
