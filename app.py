@@ -109,21 +109,61 @@ def download():
     # Ensure ffmpeg is in PATH for yt-dlp to find it
     # OR pass --ffmpeg-location
     
-    cmd = [
-        yt_dlp_path,
-        '--extractor-args', 'youtube:player_client=ios', # Try iOS to bypass bot check
-        '-f', f"{format_id}+bestaudio/best", # Merge
-        '--merge-output-format', 'mkv',      # Ensure streamable container
-        '--ffmpeg-location', ffmpeg_path,    # Explicitly tell yt-dlp where ffmpeg is
-        '-o', '-',                           # Stream to stdout
-        url
-    ]
+    # Step 1: Get Stream URLs using yt-dlp
+    try:
+        # Get direct URLs for video and audio
+        # We ask for the specific format + best audio
+        # Use iOS client to match /info behavior
+        get_url_cmd = [
+            yt_dlp_path,
+            '--extractor-args', 'youtube:player_client=ios',
+            '-f', f"{format_id}+bestaudio/best",
+            '--get-url',
+            url
+        ]
+        
+        urls_output = subprocess.check_output(get_url_cmd).decode('utf-8').strip().split('\n')
+        
+        if not urls_output:
+            return "Failed to extract stream URLs", 500
+
+        video_url = urls_output[0]
+        audio_url = urls_output[1] if len(urls_output) > 1 else None
+
+        # Step 2: Construct FFmpeg command to stream and merge
+        # -i video_url -i audio_url (if exists) -c copy -f matroska -
+        # Use absolute path for ffmpeg
+        ffmpeg_cmd = [ffmpeg_path]
+        
+        # Add User-Agent to avoid 403 Forbidden from YouTube
+        ua_str = 'User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1'
+        ffmpeg_cmd.extend(['-headers', f'{ua_str}\r\n'])
+        ffmpeg_cmd.extend(['-i', video_url])
+        
+        if audio_url:
+            ffmpeg_cmd.extend(['-headers', f'{ua_str}\r\n'])
+            ffmpeg_cmd.extend(['-i', audio_url])
+            # Map video and audio streams
+            ffmpeg_cmd.extend(['-map', '0:v', '-map', '1:a'])
+            # Copy codecs (no re-encoding) for speed and quality
+            ffmpeg_cmd.extend(['-c:v', 'copy', '-c:a', 'aac']) 
+            ffmpeg_cmd.extend(['-c', 'copy'])
+        else:
+            ffmpeg_cmd.extend(['-c', 'copy'])
+
+        # Output to stdout in matroska format
+        ffmpeg_cmd.extend(['-f', 'matroska', '-'])
+        # Add moving flags for robustness? Not needed for MKV stream.
+
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Error getting URLs: {e}")
+        return "Failed to resolve stream", 500
 
     def generate():
         process = subprocess.Popen(
-            cmd,
+            ffmpeg_cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE 
         )
         
         try:
@@ -139,11 +179,11 @@ def download():
             # Check for errors after completion
             if process.returncode != 0:
                 stderr = process.stderr.read().decode()
-                logging.error(f"yt-dlp error: {stderr}")
+                # logging.error(f"ffmpeg error: {stderr}") # ffmpeg logs to stderr often even on success
 
         except GeneratorExit:
             # Client disconnected
-            logging.info("Client disconnected, killing yt-dlp process")
+            logging.info("Client disconnected, killing ffmpeg process")
             process.terminate()
             process.wait()
         except Exception as e:
