@@ -1,0 +1,233 @@
+:root {
+    --bg-color: #0f172a;
+    --card-bg: #1e293b;
+    --primary: #8b5cf6;
+    /* Changed to purple for distinction */
+    --primary-hover: #7c3aed;
+    --text: #f8fafc;
+    --text-muted: #94a3b8;
+    --error: #ef4444;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text);
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+}
+
+.container {
+    width: 100%;
+    max-width: 800px;
+    padding: 2rem;
+    text-align: center;
+}
+
+header {
+    margin-bottom: 3rem;
+}
+
+h1 {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+}
+
+.highlight {
+    color: var(--primary);
+}
+
+p {
+    color: var(--text-muted);
+}
+
+/* Search Box */
+.search-box {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    position: relative;
+}
+
+input {
+    flex: 1;
+    padding: 1rem;
+    border-radius: 0.75rem;
+    border: 2px solid var(--card-bg);
+    background: var(--card-bg);
+    color: white;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+input:focus {
+    border-color: var(--primary);
+}
+
+button {
+    padding: 0 2rem;
+    border-radius: 0.75rem;
+    border: none;
+    background: var(--primary);
+    color: white;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 100px;
+}
+
+button:hover {
+    background: var(--primary-hover);
+}
+
+button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Spinner */
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: spin 1s ease-in-out infinite;
+    display: none;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Error */
+.error-msg {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid var(--error);
+    color: #fca5a5;
+    padding: 1rem;
+    border-radius: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+/* Video Info */
+.video-info {
+    animation: fadeIn 0.5s ease-out;
+}
+
+.meta-card {
+    background: var(--card-bg);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    text-align: left;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.meta-card img {
+    width: 160px;
+    border-radius: 0.5rem;
+    object-fit: cover;
+}
+
+.meta-text h2 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.25rem;
+    line-height: 1.4;
+}
+
+/* Table */
+.formats-container {
+    background: var(--card-bg);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.formats-container h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    text-align: left;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+th {
+    color: var(--text-muted);
+    font-weight: 600;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+td {
+    padding: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+tr:last-child td {
+    border-bottom: none;
+}
+
+.download-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    background: var(--card-bg);
+    border: 1px solid var(--primary);
+    color: var(--primary);
+}
+
+.download-btn:hover {
+    background: var(--primary);
+    color: white;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Mobile Responsive */
+@media (max-width: 600px) {
+    .meta-card {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .meta-card img {
+        width: 100%;
+        max-width: 300px;
+    }
+}

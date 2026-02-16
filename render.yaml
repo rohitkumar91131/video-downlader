@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: youtube-downloader-python
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && curl -L https://github.com/eugeneware/ffmpeg-static/releases/latest/download/ffmpeg-linux-x64 -o ffmpeg && chmod +x ffmpeg
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PORT
+        value: 10000

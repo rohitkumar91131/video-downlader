@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YT Downloader Pro (Python)</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>YT Downloader <span class="highlight">Pro</span></h1>
+            <p>Download YouTube videos safely and fast.</p>
+        </header>
+
+        <main>
+            <div class="search-box">
+                <input type="text" id="urlInput" placeholder="Paste YouTube Link Here..." autocomplete="off">
+                <button id="fetchBtn">
+                    <span id="btnText">Fetch</span>
+                    <div class="spinner" id="spinner"></div>
+                </button>
+            </div>
+
+            <div id="error-msg" class="error-msg hidden"></div>
+
+            <div id="video-info" class="video-info hidden">
+                <div class="meta-card">
+                    <img id="thumb" src="" alt="Thumbnail">
+                    <div class="meta-text">
+                        <h2 id="video-title">Video Title</h2>
+                        <p id="video-duration">Duration: 00:00</p>
+                    </div>
+                </div>
+
+                <div class="formats-container">
+                    <h3>Available Formats</h3>
+                    <div class="table-wrapper">
+                        <table id="formats-table">
+                            <thead>
+                                <tr>
+                                    <th>Quality</th>
+                                    <th>Format</th>
+                                    <th>Size</th>
+                                    <th>Details</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Rows injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+
+</html>
