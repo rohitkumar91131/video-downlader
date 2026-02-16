@@ -29,6 +29,7 @@ def get_info():
             'quiet': True,
             'no_warnings': True,
             'extract_flat': False, # get full info
+            'extractor_args': {'youtube': {'player_client': ['ios']}}, # Try iOS to bypass bot check
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -110,7 +111,7 @@ def download():
     
     cmd = [
         yt_dlp_path,
-        '--extractor-args', 'youtube:player_client=android', # Bypass bot check
+        '--extractor-args', 'youtube:player_client=ios', # Try iOS to bypass bot check
         '-f', f"{format_id}+bestaudio/best", # Merge
         '--merge-output-format', 'mkv',      # Ensure streamable container
         '--ffmpeg-location', ffmpeg_path,    # Explicitly tell yt-dlp where ffmpeg is
