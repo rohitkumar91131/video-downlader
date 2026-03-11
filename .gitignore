@@ -4,3 +4,4 @@ __pycache__/
 ffmpeg
 *.mkv
 *.mp4
+cookies.txt

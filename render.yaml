@@ -8,3 +8,11 @@ services:
     envVars:
       - key: PORT
         value: 10000
+      # Optional: path to a Netscape-format cookies file for YouTube authentication.
+      # How to obtain cookies: export them from your browser using a browser extension
+      # (e.g. "Get cookies.txt LOCALLY") and upload the file as a Render Secret File
+      # (Dashboard → your service → Environment → Secret Files). Then set this variable
+      # to the mount path of that secret file (e.g. /etc/secrets/cookies.txt).
+      # See https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp
+      - key: YOUTUBE_COOKIES_FILE
+        value: ""

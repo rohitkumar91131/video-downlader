@@ -13,6 +13,13 @@ logging.basicConfig(level=logging.INFO)
 # Regex for URL validation
 URL_REGEX = re.compile(r'^https?://(www\.)?(youtube\.com|youtu\.be)/.+$')
 
+# Optional path to a Netscape-format cookies file for YouTube authentication.
+# Set the YOUTUBE_COOKIES_FILE environment variable to the path of the file.
+COOKIES_FILE = os.environ.get('YOUTUBE_COOKIES_FILE') or None
+
+# Player clients tried in order; tv_embedded often bypasses bot-detection without cookies.
+PLAYER_CLIENTS = ['tv_embedded', 'ios', 'web']
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -30,8 +37,10 @@ def get_info():
             'quiet': True,
             'no_warnings': True,
             'extract_flat': False, # get full info
-            'extractor_args': {'youtube': {'player_client': ['ios']}}, # Try iOS to bypass bot check
+            'extractor_args': {'youtube': {'player_client': PLAYER_CLIENTS}},
         }
+        if COOKIES_FILE and os.path.isfile(COOKIES_FILE):
+            ydl_opts['cookiefile'] = COOKIES_FILE
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             
@@ -109,11 +118,13 @@ def download():
         # which is newer than the standalone binary release.
         get_url_cmd = [
             sys.executable, '-m', 'yt_dlp',
-            '--extractor-args', 'youtube:player_client=ios',
+            '--extractor-args', f'youtube:player_client={",".join(PLAYER_CLIENTS)}',
             '-f', f"{format_id}+bestaudio/best",
             '--get-url',
             url
         ]
+        if COOKIES_FILE and os.path.isfile(COOKIES_FILE):
+            get_url_cmd.extend(['--cookies', COOKIES_FILE])
         
         urls_output = subprocess.check_output(get_url_cmd).decode('utf-8').strip().split('\n')
         
