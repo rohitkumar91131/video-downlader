@@ -4,11 +4,21 @@ import json
 import logging
 import subprocess
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import sys
 import yt_dlp
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
+
+# Rate limiter – protect subprocess-heavy endpoints from abuse.
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[],
+    storage_uri="memory://",
+)
 
 # Regex for URL validation
 URL_REGEX = re.compile(r'^https?://(www\.)?(youtube\.com|youtu\.be)/.+$')
@@ -56,6 +66,7 @@ def index():
     return render_template('index.html')
 
 @app.route('/info', methods=['POST'])
+@limiter.limit("20 per minute")
 def get_info():
     data = request.get_json()
     url = data.get('url')
@@ -122,7 +133,57 @@ def get_info():
         logging.error(f"Error fetching info: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/get-url')
+@limiter.limit("30 per minute")
+def get_url():
+    """Return the direct CDN URL for a given format without proxying through ffmpeg.
+
+    This is 'Option 2' – a lightweight alternative to the ffmpeg-streaming /download
+    endpoint.  The browser opens the YouTube CDN URL directly, so no server-side
+    ffmpeg process is required (works on serverless platforms like Vercel).
+    Note: video-only formats lack audio; choose a combined format (has_video + has_audio)
+    for a complete playback experience via direct download.
+    """
+    url = request.args.get('url')
+    format_id = request.args.get('format_id')
+
+    if not url or not URL_REGEX.match(url):
+        return jsonify({'error': 'Invalid URL'}), 400
+
+    if not format_id or not re.match(r'^[a-zA-Z0-9_+]+$', format_id):
+        return jsonify({'error': 'Invalid Format ID'}), 400
+
+    try:
+        extractor_args = _build_youtube_extractor_args()
+        get_url_cmd = [
+            sys.executable, '-m', 'yt_dlp',
+            '--extractor-args', f'youtube:{_extractor_args_to_str(extractor_args)}',
+            '-f', format_id,
+            '--get-url',
+            url
+        ]
+        if COOKIES_FILE and os.path.isfile(COOKIES_FILE):
+            get_url_cmd.extend(['--cookies', COOKIES_FILE])
+
+        raw = subprocess.check_output(get_url_cmd, stderr=subprocess.PIPE).decode('utf-8').strip()
+        stream_urls = [u for u in raw.split('\n') if u.strip()]
+
+        if not stream_urls:
+            return jsonify({'error': 'Could not extract stream URL'}), 500
+
+        # Return the first (and typically only) URL for the requested format.
+        return jsonify({'url': stream_urls[0]}), 200, {
+            'Cache-Control': 'no-store',
+        }
+
+    except subprocess.CalledProcessError as e:
+        stderr_msg = e.stderr.decode('utf-8', errors='replace') if e.stderr else ''
+        logging.error(f"Error getting direct URL: {e}\n{stderr_msg}")
+        return jsonify({'error': 'Failed to resolve stream URL'}), 500
+
+
 @app.route('/download')
+@limiter.limit("10 per minute")
 def download():
     url = request.args.get('url')
     format_id = request.args.get('format_id')

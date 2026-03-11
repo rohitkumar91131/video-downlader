@@ -207,6 +207,16 @@ tr:last-child td {
     color: white;
 }
 
+.direct-btn {
+    border-color: #22c55e;
+    color: #22c55e;
+}
+
+.direct-btn:hover {
+    background: #22c55e;
+    color: white;
+}
+
 @keyframes fadeIn {
     from {
         opacity: 0;

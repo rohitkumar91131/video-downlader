@@ -83,7 +83,12 @@ function renderVideoInfo(data) {
             <td>${details.join(' + ')}</td>
             <td>
                 <button class="download-btn" onclick="downloadVideo('${data.title.replace(/'/g, "\\'")}', '${fmt.format_id}')">
-                    Download
+                    ⬇ FFmpeg
+                </button>
+            </td>
+            <td>
+                <button class="download-btn direct-btn" onclick="directDownload('${fmt.format_id}', this)">
+                    ⚡ Direct
                 </button>
             </td>
         `;
@@ -99,6 +104,31 @@ function downloadVideo(title, formatId) {
 
     const downloadUrl = `/download?url=${encodeURIComponent(url)}&format_id=${encodeURIComponent(formatId)}&title=${encodeURIComponent(title)}`;
     window.location.href = downloadUrl;
+}
+
+async function directDownload(formatId, btn) {
+    const url = urlInput.value.trim();
+    if (!url) return;
+
+    const originalText = btn.textContent;
+    btn.textContent = '…';
+    btn.disabled = true;
+
+    try {
+        const response = await fetch(`/get-url?url=${encodeURIComponent(url)}&format_id=${encodeURIComponent(formatId)}`);
+        const data = await response.json();
+
+        if (!response.ok || data.error) {
+            throw new Error(data.error || 'Failed to get direct URL');
+        }
+
+        window.open(data.url, '_blank');
+    } catch (err) {
+        showError('Direct download failed: ' + err.message);
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
 }
 
 function showError(msg) {
