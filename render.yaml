@@ -16,3 +16,13 @@ services:
       # See https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp
       - key: YOUTUBE_COOKIES_FILE
         value: ""
+      # Optional: Proof of Origin (PO) token for YouTube bot-detection bypass.
+      # This is required on server environments where YouTube bot-detection is strict.
+      # Format: "web+<token>" or just "<token>" (web+ prefix added automatically).
+      # How to obtain: https://github.com/yt-dlp/yt-dlp/wiki/Extractors#youtube
+      - key: YOUTUBE_PO_TOKEN
+        value: ""
+      # Optional: visitor_data string paired with the PO token above.
+      # Obtain from the same source as YOUTUBE_PO_TOKEN.
+      - key: YOUTUBE_VISITOR_DATA
+        value: ""

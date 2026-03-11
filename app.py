@@ -4,11 +4,21 @@ import json
 import logging
 import subprocess
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import sys
 import yt_dlp
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
+
+# Rate limiter – protect subprocess-heavy endpoints from abuse.
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[],
+    storage_uri="memory://",
+)
 
 # Regex for URL validation
 URL_REGEX = re.compile(r'^https?://(www\.)?(youtube\.com|youtu\.be)/.+$')
@@ -17,14 +27,46 @@ URL_REGEX = re.compile(r'^https?://(www\.)?(youtube\.com|youtu\.be)/.+$')
 # Set the YOUTUBE_COOKIES_FILE environment variable to the path of the file.
 COOKIES_FILE = os.environ.get('YOUTUBE_COOKIES_FILE') or None
 
-# Player clients tried in order; tv_embedded often bypasses bot-detection without cookies.
-PLAYER_CLIENTS = ['tv_embedded', 'ios', 'web']
+# Optional Proof of Origin (PO) token for YouTube bot-detection bypass.
+# Format: "web+<token_value>" or just "<token_value>" (web+ prefix added automatically).
+# Obtain via: https://github.com/yt-dlp/yt-dlp/wiki/Extractors#youtube
+PO_TOKEN = os.environ.get('YOUTUBE_PO_TOKEN') or None
+
+# Optional visitor data string paired with PO token.
+VISITOR_DATA = os.environ.get('YOUTUBE_VISITOR_DATA') or None
+
+# Player clients tried in order; tv_embedded and android often bypass bot-detection without cookies.
+PLAYER_CLIENTS = ['tv_embedded', 'android', 'ios', 'mweb', 'web']
+
+
+def _build_youtube_extractor_args():
+    """Build yt-dlp extractor_args dict for YouTube, including optional po_token/visitor_data."""
+    args = {'player_client': PLAYER_CLIENTS}
+    if PO_TOKEN:
+        # Accept either a full "client+token" string or a bare token (assume web client).
+        token_str = PO_TOKEN if '+' in PO_TOKEN else f'web+{PO_TOKEN}'
+        args['po_token'] = [token_str]
+    if VISITOR_DATA:
+        args['visitor_data'] = [VISITOR_DATA]
+    return args
+
+
+def _extractor_args_to_str(args: dict) -> str:
+    """Serialise extractor_args dict to yt-dlp CLI format: key=val1,val2;key2=val."""
+    parts = []
+    for k, v in args.items():
+        if isinstance(v, list):
+            parts.append(f"{k}={','.join(v)}")
+        else:
+            parts.append(f"{k}={v}")
+    return ';'.join(parts)
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
 @app.route('/info', methods=['POST'])
+@limiter.limit("20 per minute")
 def get_info():
     data = request.get_json()
     url = data.get('url')
@@ -37,7 +79,7 @@ def get_info():
             'quiet': True,
             'no_warnings': True,
             'extract_flat': False, # get full info
-            'extractor_args': {'youtube': {'player_client': PLAYER_CLIENTS}},
+            'extractor_args': {'youtube': _build_youtube_extractor_args()},
         }
         if COOKIES_FILE and os.path.isfile(COOKIES_FILE):
             ydl_opts['cookiefile'] = COOKIES_FILE
@@ -91,7 +133,57 @@ def get_info():
         logging.error(f"Error fetching info: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/get-url')
+@limiter.limit("30 per minute")
+def get_url():
+    """Return the direct CDN URL for a given format without proxying through ffmpeg.
+
+    This is 'Option 2' – a lightweight alternative to the ffmpeg-streaming /download
+    endpoint.  The browser opens the YouTube CDN URL directly, so no server-side
+    ffmpeg process is required (works on serverless platforms like Vercel).
+    Note: video-only formats lack audio; choose a combined format (has_video + has_audio)
+    for a complete playback experience via direct download.
+    """
+    url = request.args.get('url')
+    format_id = request.args.get('format_id')
+
+    if not url or not URL_REGEX.match(url):
+        return jsonify({'error': 'Invalid URL'}), 400
+
+    if not format_id or not re.match(r'^[a-zA-Z0-9_+]+$', format_id):
+        return jsonify({'error': 'Invalid Format ID'}), 400
+
+    try:
+        extractor_args = _build_youtube_extractor_args()
+        get_url_cmd = [
+            sys.executable, '-m', 'yt_dlp',
+            '--extractor-args', f'youtube:{_extractor_args_to_str(extractor_args)}',
+            '-f', format_id,
+            '--get-url',
+            url
+        ]
+        if COOKIES_FILE and os.path.isfile(COOKIES_FILE):
+            get_url_cmd.extend(['--cookies', COOKIES_FILE])
+
+        raw = subprocess.check_output(get_url_cmd, stderr=subprocess.PIPE).decode('utf-8').strip()
+        stream_urls = [u for u in raw.split('\n') if u.strip()]
+
+        if not stream_urls:
+            return jsonify({'error': 'Could not extract stream URL'}), 500
+
+        # Return the first (and typically only) URL for the requested format.
+        return jsonify({'url': stream_urls[0]}), 200, {
+            'Cache-Control': 'no-store',
+        }
+
+    except subprocess.CalledProcessError as e:
+        stderr_msg = e.stderr.decode('utf-8', errors='replace') if e.stderr else ''
+        logging.error(f"Error getting direct URL: {e}\n{stderr_msg}")
+        return jsonify({'error': 'Failed to resolve stream URL'}), 500
+
+
 @app.route('/download')
+@limiter.limit("10 per minute")
 def download():
     url = request.args.get('url')
     format_id = request.args.get('format_id')
@@ -116,9 +208,11 @@ def download():
         # We ask for the specific format + best audio
         # Using sys.executable -m yt_dlp ensures we use the pip-installed version (from master branch)
         # which is newer than the standalone binary release.
+        extractor_args = _build_youtube_extractor_args()
+
         get_url_cmd = [
             sys.executable, '-m', 'yt_dlp',
-            '--extractor-args', f'youtube:player_client={",".join(PLAYER_CLIENTS)}',
+            '--extractor-args', f'youtube:{_extractor_args_to_str(extractor_args)}',
             '-f', f"{format_id}+bestaudio/best",
             '--get-url',
             url
