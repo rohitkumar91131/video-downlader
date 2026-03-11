@@ -17,8 +17,39 @@ URL_REGEX = re.compile(r'^https?://(www\.)?(youtube\.com|youtu\.be)/.+$')
 # Set the YOUTUBE_COOKIES_FILE environment variable to the path of the file.
 COOKIES_FILE = os.environ.get('YOUTUBE_COOKIES_FILE') or None
 
-# Player clients tried in order; tv_embedded often bypasses bot-detection without cookies.
-PLAYER_CLIENTS = ['tv_embedded', 'ios', 'web']
+# Optional Proof of Origin (PO) token for YouTube bot-detection bypass.
+# Format: "web+<token_value>" or just "<token_value>" (web+ prefix added automatically).
+# Obtain via: https://github.com/yt-dlp/yt-dlp/wiki/Extractors#youtube
+PO_TOKEN = os.environ.get('YOUTUBE_PO_TOKEN') or None
+
+# Optional visitor data string paired with PO token.
+VISITOR_DATA = os.environ.get('YOUTUBE_VISITOR_DATA') or None
+
+# Player clients tried in order; tv_embedded and android often bypass bot-detection without cookies.
+PLAYER_CLIENTS = ['tv_embedded', 'android', 'ios', 'mweb', 'web']
+
+
+def _build_youtube_extractor_args():
+    """Build yt-dlp extractor_args dict for YouTube, including optional po_token/visitor_data."""
+    args = {'player_client': PLAYER_CLIENTS}
+    if PO_TOKEN:
+        # Accept either a full "client+token" string or a bare token (assume web client).
+        token_str = PO_TOKEN if '+' in PO_TOKEN else f'web+{PO_TOKEN}'
+        args['po_token'] = [token_str]
+    if VISITOR_DATA:
+        args['visitor_data'] = [VISITOR_DATA]
+    return args
+
+
+def _extractor_args_to_str(args: dict) -> str:
+    """Serialise extractor_args dict to yt-dlp CLI format: key=val1,val2;key2=val."""
+    parts = []
+    for k, v in args.items():
+        if isinstance(v, list):
+            parts.append(f"{k}={','.join(v)}")
+        else:
+            parts.append(f"{k}={v}")
+    return ';'.join(parts)
 
 @app.route('/')
 def index():
@@ -37,7 +68,7 @@ def get_info():
             'quiet': True,
             'no_warnings': True,
             'extract_flat': False, # get full info
-            'extractor_args': {'youtube': {'player_client': PLAYER_CLIENTS}},
+            'extractor_args': {'youtube': _build_youtube_extractor_args()},
         }
         if COOKIES_FILE and os.path.isfile(COOKIES_FILE):
             ydl_opts['cookiefile'] = COOKIES_FILE
@@ -116,9 +147,11 @@ def download():
         # We ask for the specific format + best audio
         # Using sys.executable -m yt_dlp ensures we use the pip-installed version (from master branch)
         # which is newer than the standalone binary release.
+        extractor_args = _build_youtube_extractor_args()
+
         get_url_cmd = [
             sys.executable, '-m', 'yt_dlp',
-            '--extractor-args', f'youtube:player_client={",".join(PLAYER_CLIENTS)}',
+            '--extractor-args', f'youtube:{_extractor_args_to_str(extractor_args)}',
             '-f', f"{format_id}+bestaudio/best",
             '--get-url',
             url
